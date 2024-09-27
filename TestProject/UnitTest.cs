@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Moq;
 using WorldWideWeather.Business.Model;
 using WorldWideWeather.Common.Country;
 using WorldWideWeather.Controllers;
@@ -12,7 +14,8 @@ namespace TestProject
     {
         private IConfiguration _configuration;
         private ICountry _country;
-        private SQLiteDbContext _dbContextMock;
+        private Mock<SQLiteDbContext> _dbContextMock;
+        private IList<User> users = new List<User>();
 
         public UnitTest()
         {
@@ -21,12 +24,10 @@ namespace TestProject
             _dbContextMock = DatabaseSetup();
         }
 
-        private SQLiteDbContext DatabaseSetup()
+        private Mock<SQLiteDbContext> DatabaseSetup()
         {
-            SQLiteDbContext dbContext = new SQLiteDbContext(new Microsoft.EntityFrameworkCore.DbContextOptions<SQLiteDbContext>());
-            User u = new User(dbContext);
-            u.Registration(
-                new WorldWideWeather.Business.DTO.UserDetails
+            users.Add(
+                new User
                 {
                     Address = "Rua de Cima",
                     BirthDate = DateTime.Now,
@@ -36,10 +37,14 @@ namespace TestProject
                     LastName = "Doe",
                     LivingCountry = "MLT",
                     PhoneNumber = "+356 987987987",
-                }, "xpto", _country
+                    Password = "xpto",
+                    Username = "jodo12345",
+                    Lat = 35.9375M,
+                    Lng = 14.3754M
+                }
             );
-            u.Registration(
-                new WorldWideWeather.Business.DTO.UserDetails()
+            users.Add(
+                new User()
                 {
                     Address = "Rua de Baixo",
                     BirthDate = DateTime.Now,
@@ -48,37 +53,24 @@ namespace TestProject
                     FirstName = "Jane",
                     LastName = "Doe",
                     LivingCountry = "SWE",
-                    PhoneNumber = "+356 789789789"
-                }, "xpto", _country
+                    PhoneNumber = "+356 789789789",
+                    Password = "xpto",
+                    Username = "jodo12345",
+                    Lat = 35.9375M,
+                    Lng = 14.3754M
+                }
             );
-            u.Registration(
-                new WorldWideWeather.Business.DTO.UserDetails()
-                {
-                    Address = "Rua da Esquerda",
-                    BirthDate = DateTime.Now,
-                    CitizenCountry = "GBR",
-                    Email = "email3@company.com",
-                    FirstName = "Peter",
-                    LastName = "Pan",
-                    LivingCountry = "GBR",
-                    PhoneNumber = "+356 987987987"
-                }, "xpto", _country
-            );
-            u.Registration(
-                new WorldWideWeather.Business.DTO.UserDetails()
-                {
-                    Address = "Rua da Direita",
-                    BirthDate = DateTime.Now,
-                    CitizenCountry = "MLT",
-                    Email = "email4@company.com",
-                    FirstName = "Joking",
-                    LastName = "Clown",
-                    LivingCountry = "MLT",
-                    PhoneNumber = "+356 987987987"
-                }, "xpto", _country
-            );
+            
+            var mockUser = new Mock<DbSet<User>>();
+            mockUser.As<IQueryable<User>>().Setup(m => m.Provider).Returns(users.AsQueryable().Provider);
+            mockUser.As<IQueryable<User>>().Setup(m => m.Expression).Returns(users.AsQueryable().Expression);
+            mockUser.As<IQueryable<User>>().Setup(m => m.ElementType).Returns(users.AsQueryable().ElementType);
+            mockUser.As<IQueryable<User>>().Setup(m => m.GetEnumerator()).Returns(users.GetEnumerator());
 
-            return dbContext;
+            var mockContext = new Mock<SQLiteDbContext>();
+            mockContext.Setup(c => c.Users).Returns(mockUser.Object);
+
+            return mockContext;
         }
 
         private IConfiguration ConfigurationSetup()
@@ -122,7 +114,7 @@ namespace TestProject
             rf.UserDetails.LivingCountry = "MLT";
             rf.UserDetails.PhoneNumber = "+356 987987987";
 
-            var c = new WeatherForecastController(null, _configuration, _country, _dbContextMock);
+            var c = new WeatherForecastController(null, _configuration, _country, _dbContextMock.Object);
 
             var response = c.Registration(rf);
 
@@ -132,7 +124,7 @@ namespace TestProject
         [TestMethod]
         public void LoginSuccess()
         {
-            var c = new WeatherForecastController(null, _configuration, _country, _dbContextMock);
+            var c = new WeatherForecastController(null, _configuration, _country, _dbContextMock.Object);
             var response = c.Login("jodo12345", "xpto");
             var result = (AuthenticateResponse)(((OkObjectResult)response).Value);
 
@@ -142,7 +134,7 @@ namespace TestProject
         [TestMethod]
         public void GetWeatherSuccess()
         {
-            var c = new WeatherForecastController(null, _configuration, _country, _dbContextMock);
+            var c = new WeatherForecastController(null, _configuration, _country, _dbContextMock.Object);
             var response = c.Weather("jodo12345");
 
             Assert.IsNotNull(response);
